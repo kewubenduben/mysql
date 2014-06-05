@@ -20,9 +20,9 @@
   /etc/hosts.deny r,
 
   /etc/mysql/*.pem r,
-  /etc/mysql/conf.d/ r,
-  /etc/mysql/conf.d/* r,
-  /etc/mysql/my.cnf r,
+  /etc/mysql/<%= @service_name %>.conf.d/ r,
+  /etc/mysql/<%= @service_name %>.conf.d/* r,
+  /etc/mysql/my.<%= @service_name %>.cnf r,
   /usr/lib/mysql/plugin/ r,
   /usr/lib/mysql/plugin/*.so* mr,
   /usr/sbin/mysqld mr,
@@ -33,8 +33,8 @@
   <%= node['mysql']['data_dir'] %>/** rwk,
   /var/log/mysql/ r,
   /var/log/mysql/* rw,
-  /var/run/mysqld/mysqld.pid w,
-  /var/run/mysqld/mysqld.sock w,
+  /var/run/mysqld/mysql.<%= @service_name %>.pid w,
+  /var/run/mysqld/mysqld.<%= @service_name %>.sock w,
 
   /sys/devices/system/cpu/ r,
 }

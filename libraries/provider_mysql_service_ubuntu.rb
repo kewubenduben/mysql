@@ -16,9 +16,9 @@ class Chef
             ##################
             prefix_dir = '/usr'
             run_dir = '/var/run/mysqld'
-            pid_file = '/var/run/mysqld/mysql.pid'
-            socket_file = '/var/run/mysqld/mysqld.sock'
-            include_dir = '/etc/mysql/conf.d'
+            pid_file = "/var/run/mysqld/mysql.#{new_resource.service_name}.pid"
+            socket_file = "/var/run/mysqld/mysqld.#{new_resource.service_name}.sock"
+            include_dir = "/etc/mysql/#{new_resource.service_name}.conf.d"
             ##################
 
             package 'debconf-utils' do
@@ -55,6 +55,15 @@ class Chef
               action :install
             end
 
+            template "/etc/init/mysql-#{new_resource.service_name}.conf" do
+              cookbook 'mysql'
+              source "#{new_resource.version}/init.mysql.conf.erb"
+              owner 'root'
+              group 'root'
+              mode '0600'
+              variables(:service_name => new_resource.service_name)
+            end
+
             # service
             service 'mysql' do
               provider Chef::Provider::Service::Upstart
@@ -62,7 +71,12 @@ class Chef
               action [:start, :enable]
             end
 
-            execute 'assign-root-password' do
+            service "mysql-#{new_resource.service_name}" do
+              provider Chef::Provider::Service::Upstart
+              supports :restart => true
+            end
+
+            execute "assign-root-password-#{new_resource.service_name}" do
               cmd = "#{prefix_dir}/bin/mysqladmin"
               cmd << ' -u root password '
               cmd << Shellwords.escape(new_resource.server_root_password)
@@ -71,7 +85,7 @@ class Chef
               only_if "#{prefix_dir}/bin/mysql -u root -e 'show databases;'"
             end
 
-            template '/etc/mysql_grants.sql' do
+            template "/etc/mysql_grants-#{new_resource.service_name}.sql" do
               cookbook 'mysql'
               source 'grants/grants.sql.erb'
               owner 'root'
@@ -79,7 +93,7 @@ class Chef
               mode '0600'
               variables(:config => new_resource)
               action :create
-              notifies :run, 'execute[install-grants]'
+              notifies :run, "execute[install-grants-#{new_resource.service_name}]"
             end
 
             if new_resource.server_root_password.empty?
@@ -88,10 +102,10 @@ class Chef
               pass_string = '-p' + Shellwords.escape(new_resource.server_root_password)
             end
 
-            execute 'install-grants' do
+            execute "install-grants-#{new_resource.service_name}" do
               cmd = "#{prefix_dir}/bin/mysql"
               cmd << ' -u root '
-              cmd << "#{pass_string} < /etc/mysql_grants.sql"
+              cmd << "#{pass_string} < /etc/mysql_grants-#{new_resource.service_name}.sql"
               command cmd
               action :nothing
             end
@@ -104,17 +118,18 @@ class Chef
               action :create
             end
 
-            template '/etc/apparmor.d/usr.sbin.mysqld' do
+            template "/etc/apparmor.d/usr.sbin.mysqld.#{new_resource.service_name}" do
               cookbook 'mysql'
               source 'apparmor/usr.sbin.mysqld.erb'
               owner 'root'
               group 'root'
               mode '0644'
+              variables(:service_name => new_resource.service_name )
               action :create
-              notifies :reload, 'service[apparmor-mysql]', :immediately
+              notifies :reload, "service[apparmor-mysql-#{new_resource.service_name}]", :immediately
             end
 
-            service 'apparmor-mysql' do
+            service "apparmor-mysql-#{new_resource.service_name}" do
               service_name 'apparmor'
               action :nothing
               supports :reload => true
@@ -155,7 +170,7 @@ class Chef
               action :create
             end
 
-            template '/etc/mysql/my.cnf' do
+            template "/etc/mysql/my.#{new_resource.service_name}.cnf" do
               if new_resource.template_source.nil?
                 source "#{new_resource.version}/my.cnf.erb"
                 cookbook 'mysql'
@@ -173,15 +188,15 @@ class Chef
                 :include_dir => include_dir
                 )
               action :create
-              notifies :run, 'bash[move mysql data to datadir]'
-              notifies :restart, 'service[mysql]'
+              notifies :run, "bash[copy mysql data to datadir #{new_resource.service_name}]"
+              notifies :restart, "service[mysql-#{new_resource.service_name}]"
             end
 
-            bash 'move mysql data to datadir' do
+            bash "copy mysql data to datadir #{new_resource.service_name}" do
               user 'root'
               code <<-EOH
               service mysql stop \
-              && mv /var/lib/mysql/* #{new_resource.data_dir}
+              && cp -rf /var/lib/mysql/* #{new_resource.data_dir}
               EOH
               action :nothing
               creates "#{new_resource.data_dir}/ibdata1"
@@ -193,7 +208,7 @@ class Chef
 
         action :restart do
           converge_by 'ubuntu pattern' do
-            service 'mysql' do
+            service "mysql-#{new_resource.service_name}" do
               provider Chef::Provider::Service::Upstart
               supports :restart => true
               action :restart
@@ -203,7 +218,7 @@ class Chef
 
         action :reload do
           converge_by 'ubuntu pattern' do
-            service 'mysql' do
+            service "mysql-#{new_resource.service_name}" do
               provider Chef::Provider::Service::Upstart
               supports :reload => true
               action :reload
