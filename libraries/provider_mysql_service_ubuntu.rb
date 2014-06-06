@@ -118,6 +118,12 @@ class Chef
               action :create
             end
 
+            service "apparmor-mysql-#{new_resource.service_name}" do
+              service_name 'apparmor'
+              action :nothing
+              supports :reload => true
+            end
+
             template "/etc/apparmor.d/usr.sbin.mysqld.#{new_resource.service_name}" do
               cookbook 'mysql'
               source 'apparmor/usr.sbin.mysqld.erb'
@@ -127,12 +133,6 @@ class Chef
               variables(:service_name => new_resource.service_name )
               action :create
               notifies :reload, "service[apparmor-mysql-#{new_resource.service_name}]", :immediately
-            end
-
-            service "apparmor-mysql-#{new_resource.service_name}" do
-              service_name 'apparmor'
-              action :nothing
-              supports :reload => true
             end
 
             template '/etc/mysql/debian.cnf' do
@@ -197,6 +197,7 @@ class Chef
               code <<-EOH
               service mysql stop \
               && cp -rf /var/lib/mysql/* #{new_resource.data_dir}
+              chown -R mysql.mysql /var/lib/mysql/* #{new_resource.data_dir}
               EOH
               action :nothing
               creates "#{new_resource.data_dir}/ibdata1"

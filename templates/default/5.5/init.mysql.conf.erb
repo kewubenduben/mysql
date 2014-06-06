@@ -44,7 +44,7 @@ pre-start script
     fi
 end script
 
-exec /usr/sbin/mysqld
+exec /usr/sbin/mysqld --defaults-file="${HOME}"/my.<%= @service_name %>.cnf
 
 post-start script
    for i in `seq 1 30` ; do
